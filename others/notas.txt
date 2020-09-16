@@ -1,0 +1,17 @@
+Las etiquetas a quitar son las que tienen:
+Municipio
+Localidad
+Pueblo
+Centro Histórico
+Cabecera municipal
+Comunidad
+Todas las que tengan “de” o “en”, como poblado de, ciudad de, Conalep de, zona en…
+Otras palabras que no son un lugar como “hasta”, “desde”, “ropero”
+
+Las etiquetas que no se deben quitar son:
+Estado
+Colonia 
+calles
+delegación
+carretera
+autopista
