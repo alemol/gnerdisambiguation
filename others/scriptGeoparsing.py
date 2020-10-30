@@ -11,7 +11,6 @@ def read_file(rawText):
 	try:
 		input_file = open(rawText, 'r', encoding="utf8")
 		text = input_file.read()
-		#print(text, type(text))
 		input_file.close()
 	except IOError:
 		sys.exit('problem reading: ' + rawText)
@@ -24,19 +23,13 @@ def save_file(labeledText, processedText):
 		output_file.close()
 	except IOError:
 		sys.exit('problem writting: ' + labeledText)
-	
 
 def request(rawText, labeledText):
 	text = read_file(rawText)
-	#print(text)
 	url = "http://geoparsing.geoint.mx/ws/"
 	data = dict({"text" : text})
-	#print(data)
-	#datos = json.dumps(data, encoding="utf8", ensure_ascii=False)
-	#print(datos)
 	response = requests.post(url, json = data, headers={"Content-Type":"application/json"})
 	txt = json.dumps(response.json(), encoding="utf8", indent=2, ensure_ascii=False)
-	#print(txt)
 	save_file(labeledText, txt)
 	print(response)
 

@@ -11,12 +11,14 @@ def inside_state(point, df):
     for index, row in df.iterrows(): 
         inside = point.within(row['geometry'])
         if(inside):
-            info = {
-               'entidad_nombre': row["entidad_nombre"].strip(),
-               'entidad_cvegeo': row["entidad_cvegeo"]
-            }
-
+            info = row["admin1code"]
     return info
+
+def bridge(point):
+    STATE_GEOJSON = './sources/estados.geojson'
+    geodf = load_geojson_state(STATE_GEOJSON)
+    state = inside_state(point, geodf)
+    return state
 
 if __name__ == '__main__':
     STATE_GEOJSON = './sources/estados.geojson'
