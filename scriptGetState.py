@@ -53,7 +53,9 @@ def get_geometry_by_state(name, df):
             info = {
                'entidad_nombre': row["entidad_nombre"].strip(),
                'entidad_cvegeo': row["entidad_cvegeo"],
-               'geometry': row['geometry']
+               'geometry': row['geometry'],
+               'center': row['geometry'].centroid,
+               'boundingbox': row['geometry'].bounds
             }
 
     return info
@@ -65,7 +67,9 @@ def get_geometry_by_code(code, df):
             info = {
                'entidad_nombre': row["entidad_nombre"].strip(),
                'entidad_cvegeo': row["entidad_cvegeo"],
-               'geometry': row['geometry']
+               'geometry': row['geometry'],
+               'center': row['geometry'].centroid,
+               'boundingbox': row['geometry'].bounds
             }
 
     return info
