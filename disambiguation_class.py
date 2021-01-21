@@ -225,18 +225,20 @@ class Disambiguation:
 
 	def getStack(self):
 		dic_entities = {}
+		dic_entity = {}
 		for ee in self.stack.entities():
 			dic_entities = {'name': ee.getName(), 'feature_code':ee.getFeatureCode(),'longitude':ee.getLongitude(),'latitude':ee.getLatitude(),
 			'admin1_code':ee.getAdmin1code(), 'feature_value': ee.getFeatureValue()}
-		return dic_entities
+			dic_entity = {ee.getName() : dic_entities}
+		return dic_entity
 
 def main():
 	text = "Los <START:location> Tacos de doña Lupe <END>, la  <START:location> Panaderia el Rosal <END> y la <START:location> Ferreteria el clavo <END> están registrados en el municipio de <START:location> Guerrero <END> , <START:location> Tamaulipas <END>"
 	initObject = Disambiguation()
 	resultados = initObject.load_entities(text)
 	#print("GOOD?",resultados)
-	result = initObject.getStack()
-	print("Stack Complete: ",result)
+	finalStack = initObject.getStack()
+	#print("Stack Complete: ",result)
 	del initObject
 
 if __name__ == '__main__':
