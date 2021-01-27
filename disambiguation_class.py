@@ -229,7 +229,8 @@ class Disambiguation:
 		for ee in self.stack.entities():
 			dic_entities = {'name': ee.getName(), 'feature_code':ee.getFeatureCode(),'longitude':ee.getLongitude(),'latitude':ee.getLatitude(),
 			'admin1_code':ee.getAdmin1code(), 'feature_value': ee.getFeatureValue()}
-			dic_entity = {ee.getName() : dic_entities}
+			name_key = ee.getCanonicalName().replace("_", " ")
+			dic_entity[name_key] = dic_entities
 		return dic_entity
 
 def main():
