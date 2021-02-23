@@ -1,5 +1,6 @@
-import pymysql, clips, re, sys, json, factsGenerator, hierarchical_level
+import clips, re, sys, json, factsGenerator, hierarchical_level
 import scriptGetState as getAdmin1
+import DBconnection
 from shapely.geometry import Point
 from opencage.geocoder import OpenCageGeocode
 from stack import Stack
@@ -11,6 +12,7 @@ bounds='-117.07031,14.82841,-86.92383,32.43044'
 class Disambiguation:
 	success = False
 	resultados = []
+	method = "opencage"
 
 	def __init__(self):
 		self.stack = Stack()
@@ -26,25 +28,50 @@ class Disambiguation:
 		return self.resultados
 
 	#############################################################################################
-	def load_entities(self, text):
+	def load_entities(self, text, method):
 		list_entity = re.findall(r'<START:location>[\s]+(.+?)[\s]+<END>',text)
-		for entity in list_entity:
-			factList=self.facts_generator(entity, self.stack)
-			self.clip_s(factList)
+		if (method == "opencage"):
+			for entity in list_entity:
+				factList=self.facts_generator_oc(entity, self.stack)
+				self.clip_s(factList)
+		elif (method == "geonames"):
+			conn = DBconnection.db_conect() 
+			for entity in list_entity:
+				factList=self.facts_generator_gn(entity, self.conn, self.stack,)
+				self.clip_s(factList)
+		else:
+			print("Ingrese un metodo valido")
 		self.success = True
 		return self.success
 		
-	def facts_generator(self, nameEntity, stack):
+	def facts_generator_oc(self, nameEntity, stack):
+		print("opencage")
 		factList = []
 		replaceNameEntity = nameEntity.replace(" ", "_")
 		if (stack.isEmpty()):
-			factsGenerator.in_db(key, nameEntity, factList, replaceNameEntity, bounds)
+			factsGenerator.in_db_oc(key, nameEntity, factList, replaceNameEntity, bounds)
 			factsGenerator.stackIsEmpty(factList, stack)
 		else:
-			factsGenerator.in_db(key, nameEntity, factList, replaceNameEntity, bounds)
-			factsGenerator.predecessor(key, nameEntity, factList, stack, replaceNameEntity, bounds)
-			factsGenerator.association_between(key, nameEntity, factList, stack, replaceNameEntity, bounds)
+			factsGenerator.in_db_oc(key, nameEntity, factList, replaceNameEntity, bounds)
+			factsGenerator.predecessor_oc(key, nameEntity, factList, stack, replaceNameEntity, bounds)
+			factsGenerator.association_between_oc(key, nameEntity, factList, stack, replaceNameEntity, bounds)
 			factsGenerator.stackIsEmpty(factList, stack)
+		return factList
+
+	def facts_generator_gn(self, nameEntity, conn, stack):
+		print("geonames")
+		cursor = conn.cursor()
+		factList = []
+		replaceNameEntity = nameEntity.replace(" ", "_")
+		if (stack.isEmpty()):
+			factsGenerator.in_db_gn(nameEntity, cursor, factList, replaceNameEntity)
+			factsGenerator.stackIsEmpty(factList, stack)
+		else:
+			factsGenerator.in_db_gn(nameEntity, cursor, factList, replaceNameEntity)
+			factsGenerator.predecessor_gn(nameEntity, cursor, factList, stack, replaceNameEntity)
+			factsGenerator.association_between_gn(nameEntity, cursor, factList, stack, replaceNameEntity)
+			factsGenerator.stackIsEmpty(factList, stack)
+		cursor.close()
 		return factList
 
 	def clip_s(self, factList):
@@ -66,28 +93,43 @@ class Disambiguation:
 		env.reset()
 
 	def addLocation(self, nameEntity):
-		e = self.getEntity(nameEntity)
+		if (method == "opencage"):
+			e = self.getEntity_oc(nameEntity)
+		elif(method == "geonames"):
+			e = self.getEntity_gn(nameEntity)
 		self.stack.push(e)
 		self.success = False
 
 	def addLocationWithAssociation(self, nameEntity):
-		e = self.getEntityWithAssociation(nameEntity)
+		if (method == "opencage"):
+			e = self.getEntityWithAssociation_oc(nameEntity)
+		elif(method == "geonames"):
+			e = self.getEntityWithAssociation_gn(nameEntity)
 		self.stack.push(e)
 
 	def addLocationWithoutAssociation(self, nameEntity):
-		e = self.getEntityWithoutAssociation(nameEntity)
+		if (method == "opencage"):
+			e = self.getEntityWithoutAssociation_oc(nameEntity)
+		elif(method == "geonames"):
+			e = self.getEntityWithoutAssociation_gn(nameEntity)
 		self.stack.push(e)
 
 	def stackExchange(self, nameEntity):
 		replaceNameEntity = nameEntity.replace("_", " ")
 		t = self.stack.top()
 		self.stack.pop()
-		e = self.getEntity(replaceNameEntity)
+		if (method == "opencage"):
+			e = self.getEntity_oc(replaceNameEntity)
+		elif(method == "geonames"):
+			e = self.getEntity_gn(replaceNameEntity)
 		self.getEntityWithAssociationstack.push(e)
 		if(t.getFeatureValue() == 10):
 			n = self.associateConflictTop(t.getName())
 		else:
-			n = self.getEntityWithAssociation(t.getName())
+			if (method == "opencage"):
+				n = self.getEntityWithAssociation_oc(t.getName())
+			elif(method == "geonames"):
+				n = self.getEntityWithAssociation_gn(t.getName())
 			self.stack.push(n)
 		getAlternate(t,n)
 
@@ -175,13 +217,28 @@ class Disambiguation:
 			self.stack.push(e)
 		self.conflicts_stack.removeAll()
 
-	def getEntity(self, nameEntity):
+	def getEntity_oc(self, nameEntity):
 		geocoder = OpenCageGeocode(key)
 		response = geocoder.geocode(nameEntity, countrycode= 'mx', language='es', bounds = bounds, limit = 1, no_annotations = 1)
 		e = self.addEntityObject(response,nameEntity)
 		return e
 
-	def getEntityWithAssociation(self, nameEntity):
+	def getEntity_gn(self, nameEntity):
+		conn = db_conect()
+		cursor = conn.cursor()
+		query = ("SELECT name,locations.feature_code,admin1_code,latitude,longitude,feature_value,admin2_code,"
+	        "levenshtein(soundex(name), soundex('{0}')) as levenshtein "
+			"FROM locations INNER JOIN fc_view ON (locations.feature_code = fc_view.feature_code) "
+			"WHERE (name LIKE '%{0}' OR alternatenames LIKE '%{0},%') "
+			"ORDER BY feature_value asc, population desc, levenshtein LIMIT 2;")
+		cursor.execute(query.format(nameEntity))
+		ent = cursor.fetchall()
+		e = addEntityObject(ent,nameEntity)
+		cursor.close()
+		conn.close()
+		return e
+
+	def getEntityWithAssociation_oc(self, nameEntity):
 		top_FeatureValue = self.stack.top().getFeatureValue()
 		top_admin1Code = self.stack.top().getAdmin1code()
 		boundsLocal = '{0},{1}'.format(self.stack.top().getLatitude(),self.stack.top().getLongitude())
@@ -194,10 +251,63 @@ class Disambiguation:
 			e = self.addEntityObject(query2,nameEntity)
 		return e
 
-	def getEntityWithoutAssociation(self, nameEntity):
+	def getEntityWithAssociation_gn(self, nameEntity):
+		top_FeatureValue = stack.top().getFeatureValue()
+		top_admin1Code = stack.top().getAdmin1code()
+		conn = db_conect()
+		cursor = conn.cursor()
+		query=("SELECT name, locations.feature_code as feature_code,"
+	    	"admin1_code, latitude, longitude, feature_value, admin2_code,"
+			"SQRT(POW((CAST(latitude AS DECIMAL(10,4)) - ({0})),2) + "
+	    	"POW((CAST(longitude AS DECIMAL(10,4)) - ({1})),2)) AS distance_to_top "
+			"FROM locations INNER JOIN fc_view ON(locations.feature_code = fc_view.feature_code) "
+				"WHERE (name LIKE '%{2}' OR alternatenames LIKE '%{2},%') "
+					"AND feature_value >={3} AND admin1_code = {4} "
+			"ORDER BY feature_value, distance_to_top LIMIT 2;")
+		query2=("SELECT name, locations.feature_code as feature_code,"
+	    	"admin1_code, latitude, longitude, feature_value, admin2_code "
+			"FROM locations INNER JOIN fc_view ON(locations.feature_code = fc_view.feature_code) "
+				"WHERE (name LIKE '%{0}' OR alternatenames LIKE '%{0},%') "
+					"AND feature_value >={1} "
+			"ORDER BY feature_value LIMIT 2;")
+		query3 =  ("SELECT name, locations.feature_code AS feature_code, admin1_code, "
+			"latitude, longitude, feature_value,admin2_code "
+			"FROM locations INNER JOIN fc_view ON (locations.feature_code = fc_view.feature_code) " 
+			"WHERE (name LIKE '%{0}' OR alternatenames LIKE '%{0},%') " 
+			"ORDER BY feature_value LIMIT 2;")	
+		if(cursor.execute(query.format(stack.top().getLatitude(), stack.top().getLongitude(), nameEntity, top_FeatureValue, top_admin1Code))):
+			ent = cursor.fetchall()
+			e = addEntityObject(ent,nameEntity)
+		elif(cursor.execute(query2.format(nameEntity, top_FeatureValue))):
+			ent = cursor.fetchall()
+			e = addEntityObject(ent,nameEntity)	
+		else:
+			cursor.execute(query3.format(nameEntity))
+			ent = cursor.fetchall()
+			e = addEntityObject(ent,nameEntity)
+		cursor.close()
+		conn.close()
+		return e
+
+	def getEntityWithoutAssociation_oc(self, nameEntity):
 		geocoder = OpenCageGeocode(key)
 		query = geocoder.geocode(nameEntity, countrycode= 'mx', language='es', bounds = bounds, limit = 1, no_annotations = 1)
 		e = self.addEntityObject(query,nameEntity)
+		return e
+
+	def getEntityWithoutAssociation_gn(self, nameEntity):
+		conn = db_conect()
+		cursor = conn.cursor()
+		top_FeatureValue = stack.top().getFeatureValue()
+		query = ("SELECT name,locations.feature_code,admin1_code,latitude,longitude,feature_value,admin2_code "
+			"FROM locations INNER JOIN fc_view ON (locations.feature_code = fc_view.feature_code) "
+			"WHERE (name LIKE '%{0}' OR alternatenames LIKE '%{0},%') "
+			"AND feature_value>={1} ORDER BY feature_value LIMIT 2;")
+		cursor.execute(query.format(nameEntity, top_FeatureValue))
+		ent = cursor.fetchall()
+		cursor.close()
+		conn.close()
+		e = addEntityObject(ent,nameEntity)
 		return e
 
 	def addEntityObject(self, response,nameEntity):
@@ -235,8 +345,9 @@ class Disambiguation:
 
 def main():
 	text = "Los <START:location> Tacos de doña Lupe <END>, la  <START:location> Panaderia el Rosal <END> y la <START:location> Ferreteria el clavo <END> están registrados en el municipio de <START:location> Guerrero <END> , <START:location> Tamaulipas <END>"
+	val = "geonames" # 1 opencage 2 geonames
 	initObject = Disambiguation()
-	resultados = initObject.load_entities(text)
+	resultados = initObject.load_entities(text, val)
 	#print("GOOD?",resultados)
 	finalStack = initObject.getStack()
 	#print("Stack Complete: ",result)
