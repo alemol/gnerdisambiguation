@@ -14,10 +14,11 @@ class Disambiguation:
 	resultados = []
 	method = "opencage"
 
-	def __init__(self):
+	def __init__(self, method):
 		self.stack = Stack()
 		self.conflicts_stack = Stack()
 		self.support_stack = Stack()
+		self.method = method
 	
 	def __del__(self):
 		self.stack.removeAll()
@@ -28,16 +29,16 @@ class Disambiguation:
 		return self.resultados
 
 	#############################################################################################
-	def load_entities(self, text, method):
+	def load_entities(self, text):
 		list_entity = re.findall(r'<START:location>[\s]+(.+?)[\s]+<END>',text)
-		if (method == "opencage"):
+		if (self.method == "opencage"):
 			for entity in list_entity:
 				factList=self.facts_generator_oc(entity, self.stack)
 				self.clip_s(factList)
-		elif (method == "geonames"):
-			conn = DBconnection.db_conect() 
+		elif (self.method == "geonames"):
+			self.conn = DBconnection.db_conect() 
 			for entity in list_entity:
-				factList=self.facts_generator_gn(entity, self.conn, self.stack,)
+				factList=self.facts_generator_gn(entity, self.conn, self.stack)
 				self.clip_s(factList)
 		else:
 			print("Ingrese un metodo valido")
@@ -93,24 +94,24 @@ class Disambiguation:
 		env.reset()
 
 	def addLocation(self, nameEntity):
-		if (method == "opencage"):
+		if (self.method == "opencage"):
 			e = self.getEntity_oc(nameEntity)
-		elif(method == "geonames"):
+		elif(self.method == "geonames"):
 			e = self.getEntity_gn(nameEntity)
 		self.stack.push(e)
 		self.success = False
 
 	def addLocationWithAssociation(self, nameEntity):
-		if (method == "opencage"):
+		if (self.method == "opencage"):
 			e = self.getEntityWithAssociation_oc(nameEntity)
-		elif(method == "geonames"):
+		elif(self.method == "geonames"):
 			e = self.getEntityWithAssociation_gn(nameEntity)
 		self.stack.push(e)
 
 	def addLocationWithoutAssociation(self, nameEntity):
-		if (method == "opencage"):
+		if (self.method == "opencage"):
 			e = self.getEntityWithoutAssociation_oc(nameEntity)
-		elif(method == "geonames"):
+		elif(self.method == "geonames"):
 			e = self.getEntityWithoutAssociation_gn(nameEntity)
 		self.stack.push(e)
 
@@ -118,17 +119,17 @@ class Disambiguation:
 		replaceNameEntity = nameEntity.replace("_", " ")
 		t = self.stack.top()
 		self.stack.pop()
-		if (method == "opencage"):
+		if (self.method == "opencage"):
 			e = self.getEntity_oc(replaceNameEntity)
-		elif(method == "geonames"):
+		elif(self.method == "geonames"):
 			e = self.getEntity_gn(replaceNameEntity)
 		self.getEntityWithAssociationstack.push(e)
 		if(t.getFeatureValue() == 10):
 			n = self.associateConflictTop(t.getName())
 		else:
-			if (method == "opencage"):
+			if (self.method == "opencage"):
 				n = self.getEntityWithAssociation_oc(t.getName())
-			elif(method == "geonames"):
+			elif(self.method == "geonames"):
 				n = self.getEntityWithAssociation_gn(t.getName())
 			self.stack.push(n)
 		getAlternate(t,n)
@@ -346,11 +347,11 @@ class Disambiguation:
 def main():
 	text = "Los <START:location> Tacos de doña Lupe <END>, la  <START:location> Panaderia el Rosal <END> y la <START:location> Ferreteria el clavo <END> están registrados en el municipio de <START:location> Guerrero <END> , <START:location> Tamaulipas <END>"
 	val = "geonames" # 1 opencage 2 geonames
-	initObject = Disambiguation()
-	resultados = initObject.load_entities(text, val)
-	#print("GOOD?",resultados)
+	initObject = Disambiguation(val)
+	resultados = initObject.load_entities(text)
+	print("GOOD?",resultados)
 	finalStack = initObject.getStack()
-	#print("Stack Complete: ",result)
+	print("Stack Complete: ",finalStack)
 	del initObject
 
 if __name__ == '__main__':
