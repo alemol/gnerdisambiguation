@@ -134,7 +134,7 @@ class Disambiguation:
 			elif(self.method == "geonames"):
 				n = self.getEntityWithAssociation_gn(t.getName())
 				self.stack.push(n)
-		getAlternate(t,n)
+		self.getAlternate(t,n)
 
 	def getAlternate(self, t,n):
 		t_alternateLongitude = t.getAlternateLongitude()
@@ -154,9 +154,9 @@ class Disambiguation:
 		e.setCanonicalName(nameEntity)
 		e.setFeatureCode("other")
 		e.setFeatureValue("10")
-		e.setAdmin1code(stack.top().getAdmin1code())
-		e.setLatitude(stack.top().getLatitude())
-		e.setLongitude(stack.top().getLongitude())
+		e.setAdmin1code(self.stack.top().getAdmin1code())
+		e.setLatitude(self.stack.top().getLatitude())
+		e.setLongitude(self.stack.top().getLongitude())
 		self.stack.push(e)
 
 	def addConflictsStack(self, nameEntity):
@@ -300,7 +300,7 @@ class Disambiguation:
 	def getEntityWithoutAssociation_gn(self, nameEntity):
 		conn = self.conn
 		cursor = conn.cursor()
-		top_FeatureValue = stack.top().getFeatureValue()
+		top_FeatureValue = self.stack.top().getFeatureValue()
 		query = ("SELECT name,d.feature_code,admin1_code,latitude,longitude,feature_value,admin2_code "
 			"FROM locations d INNER JOIN fc_view ON (d.feature_code = fc_view.feature_code) "
 			"WHERE (name LIKE '%{0}' OR alternatenames LIKE '%{0},%') "
