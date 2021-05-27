@@ -123,15 +123,17 @@ class Disambiguation:
 			e = self.getEntity_oc(replaceNameEntity)
 		elif(self.method == "geonames"):
 			e = self.getEntity_gn(replaceNameEntity)
-		self.getEntityWithAssociationstack.push(e)
+			self.stack.push(e)
+
 		if(t.getFeatureValue() == 10):
 			n = self.associateConflictTop(t.getName())
 		else:
 			if (self.method == "opencage"):
 				n = self.getEntityWithAssociation_oc(t.getName())
+				self.stack.push(n)
 			elif(self.method == "geonames"):
 				n = self.getEntityWithAssociation_gn(t.getName())
-			self.stack.push(n)
+				self.stack.push(n)
 		getAlternate(t,n)
 
 	def getAlternate(self, t,n):
@@ -225,18 +227,16 @@ class Disambiguation:
 		return e
 
 	def getEntity_gn(self, nameEntity):
-		conn = db_conect()
+		conn = self.conn
 		cursor = conn.cursor()
-		query = ("SELECT name,locations.feature_code,admin1_code,latitude,longitude,feature_value,admin2_code,"
-	        "levenshtein(soundex(name), soundex('{0}')) as levenshtein "
-			"FROM locations INNER JOIN fc_view ON (locations.feature_code = fc_view.feature_code) "
+		query = ("SELECT name, d.feature_code,admin1_code,latitude,longitude,feature_value,admin2_code "
+			"FROM geoparse.locations d INNER JOIN fc_view ON (d.feature_code = fc_view.feature_code) "
 			"WHERE (name LIKE '%{0}' OR alternatenames LIKE '%{0},%') "
-			"ORDER BY feature_value asc, population desc, levenshtein LIMIT 2;")
+			"ORDER BY feature_value asc, population desc  LIMIT 2;")
 		cursor.execute(query.format(nameEntity))
 		ent = cursor.fetchall()
-		e = addEntityObject(ent,nameEntity)
+		e = self.addEntityObject(ent,nameEntity)
 		cursor.close()
-		conn.close()
 		return e
 
 	def getEntityWithAssociation_oc(self, nameEntity):
@@ -253,41 +253,42 @@ class Disambiguation:
 		return e
 
 	def getEntityWithAssociation_gn(self, nameEntity):
-		top_FeatureValue = stack.top().getFeatureValue()
-		top_admin1Code = stack.top().getAdmin1code()
-		conn = db_conect()
+		top_FeatureValue = self.stack.top().getFeatureValue()
+		top_admin1Code = self.stack.top().getAdmin1code()
+		conn = self.conn
 		cursor = conn.cursor()
-		query=("SELECT name, locations.feature_code as feature_code,"
+
+		query=("SELECT name, d.feature_code as feature_code,"
 	    	"admin1_code, latitude, longitude, feature_value, admin2_code,"
 			"SQRT(POW((CAST(latitude AS DECIMAL(10,4)) - ({0})),2) + "
 	    	"POW((CAST(longitude AS DECIMAL(10,4)) - ({1})),2)) AS distance_to_top "
-			"FROM locations INNER JOIN fc_view ON(locations.feature_code = fc_view.feature_code) "
+			"FROM geoparse.locations d INNER JOIN fc_view ON(d.feature_code = fc_view.feature_code) "
 				"WHERE (name LIKE '%{2}' OR alternatenames LIKE '%{2},%') "
 					"AND feature_value >={3} AND admin1_code = {4} "
 			"ORDER BY feature_value, distance_to_top LIMIT 2;")
-		query2=("SELECT name, locations.feature_code as feature_code,"
+		query2=("SELECT name, d.feature_code as feature_code,"
 	    	"admin1_code, latitude, longitude, feature_value, admin2_code "
-			"FROM locations INNER JOIN fc_view ON(locations.feature_code = fc_view.feature_code) "
+			"FROM geoparse.locations d INNER JOIN fc_view ON(d.feature_code = fc_view.feature_code) "
 				"WHERE (name LIKE '%{0}' OR alternatenames LIKE '%{0},%') "
 					"AND feature_value >={1} "
 			"ORDER BY feature_value LIMIT 2;")
-		query3 =  ("SELECT name, locations.feature_code AS feature_code, admin1_code, "
+		query3 =  ("SELECT name, d.feature_code AS feature_code, admin1_code, "
 			"latitude, longitude, feature_value,admin2_code "
-			"FROM locations INNER JOIN fc_view ON (locations.feature_code = fc_view.feature_code) " 
+			"FROM geoparse.locations d INNER JOIN fc_view ON (d.feature_code = fc_view.feature_code) " 
 			"WHERE (name LIKE '%{0}' OR alternatenames LIKE '%{0},%') " 
 			"ORDER BY feature_value LIMIT 2;")	
-		if(cursor.execute(query.format(stack.top().getLatitude(), stack.top().getLongitude(), nameEntity, top_FeatureValue, top_admin1Code))):
+		
+		if(cursor.execute(query.format(self.stack.top().getLatitude(), self.stack.top().getLongitude(), nameEntity, top_FeatureValue, top_admin1Code))):
 			ent = cursor.fetchall()
-			e = addEntityObject(ent,nameEntity)
+			e = self.addEntityObject(ent,nameEntity)
 		elif(cursor.execute(query2.format(nameEntity, top_FeatureValue))):
 			ent = cursor.fetchall()
-			e = addEntityObject(ent,nameEntity)	
+			e = self.addEntityObject(ent,nameEntity)	
 		else:
 			cursor.execute(query3.format(nameEntity))
 			ent = cursor.fetchall()
-			e = addEntityObject(ent,nameEntity)
+			e = self.addEntityObject(ent,nameEntity)
 		cursor.close()
-		conn.close()
 		return e
 
 	def getEntityWithoutAssociation_oc(self, nameEntity):
@@ -297,36 +298,56 @@ class Disambiguation:
 		return e
 
 	def getEntityWithoutAssociation_gn(self, nameEntity):
-		conn = db_conect()
+		conn = self.conn
 		cursor = conn.cursor()
 		top_FeatureValue = stack.top().getFeatureValue()
-		query = ("SELECT name,locations.feature_code,admin1_code,latitude,longitude,feature_value,admin2_code "
-			"FROM locations INNER JOIN fc_view ON (locations.feature_code = fc_view.feature_code) "
+		query = ("SELECT name,d.feature_code,admin1_code,latitude,longitude,feature_value,admin2_code "
+			"FROM locations d INNER JOIN fc_view ON (d.feature_code = fc_view.feature_code) "
 			"WHERE (name LIKE '%{0}' OR alternatenames LIKE '%{0},%') "
 			"AND feature_value>={1} ORDER BY feature_value LIMIT 2;")
 		cursor.execute(query.format(nameEntity, top_FeatureValue))
 		ent = cursor.fetchall()
 		cursor.close()
-		conn.close()
-		e = addEntityObject(ent,nameEntity)
+		e = self.addEntityObject(ent,nameEntity)
 		return e
 
 	def addEntityObject(self, response,nameEntity):
 		e = Entity()
 		e.setCanonicalName(nameEntity)
-		try:
-			e.setAdmin1code(response[0]["components"]["state_code"])
-		except Exception:
-			coordinates = Point(response[0]["geometry"]["lng"], response[0]["geometry"]["lat"])
-			state_code = getAdmin1.bridge(coordinates)
-			e.setAdmin1code(state_code)
-		e.setLatitude(response[0]["geometry"]["lat"])
-		e.setLongitude(response[0]["geometry"]["lng"])
-		e.setName(nameEntity)
-		feature_code, feature_value = self.fvalue(response[0]["components"]["_type"])
-		e.setFeatureValue(feature_value)
-		e.setFeatureCode(feature_code)
-		return e
+		if (self.method == "opencage"):
+			try:
+				e.setAdmin1code(response[0]["components"]["state_code"])
+			except Exception:
+				coordinates = Point(response[0]["geometry"]["lng"], response[0]["geometry"]["lat"])
+				state_code = getAdmin1.bridge(coordinates)
+				e.setAdmin1code(state_code)
+			e.setLatitude(response[0]["geometry"]["lat"])
+			e.setLongitude(response[0]["geometry"]["lng"])
+			e.setName(nameEntity)
+			feature_code, feature_value = self.fvalue(response[0]["components"]["_type"])
+			e.setFeatureValue(feature_value)
+			e.setFeatureCode(feature_code)
+			return e
+		else:
+			try:
+				e.setAdmin1code(response[0][6])
+			except Exception:
+				coordinates = Point(response[0][4],response[0][3])
+				state_code = getAdmin1.bridge(coordinates)
+				e.setAdmin1code(state_code)
+			
+			e.setFeatureCode(response[0][1])
+			e.setAdmin1code(response[0][2])
+			e.setLatitude(response[0][3])
+			e.setLongitude(response[0][4])
+			e.setFeatureValue(response[0][5])
+			e.setAdmin2code(response[0][6])
+			e.setName(nameEntity)
+			if len(response)==2:
+				e.setAlternateLongitude(response[1][4])
+				e.setAlternateLatitude(response[1][3])
+
+			return e	
 
 	def fvalue(self, featureV):
 		hlevel = hierarchical_level.dic_level()
